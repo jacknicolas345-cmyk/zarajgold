@@ -80,6 +80,13 @@ class CheckoutIn(BaseModel):
     address: str
     phone: str
 
+class ContactIn(BaseModel):
+    name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    subject: Optional[str] = None
+    message: str
+
 class OrderOut(BaseModel):
     id: str
     user_email: str
