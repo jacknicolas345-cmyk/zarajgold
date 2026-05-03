@@ -279,10 +279,49 @@ async def admin_stats(_admin=Depends(require_admin)):
         \"revenue\": round(revenue, 2),
     }
 
+# ------------------ Contact ------------------
+@api.post(\"/contact\")
+async def contact(data: ContactIn):
+    doc = {
+        \"id\": str(uuid.uuid4()),
+        \"name\": data.name,
+        \"email\": data.email.lower(),
+        \"phone\": data.phone or \"\",
+        \"subject\": data.subject or \"\",
+        \"message\": data.message,
+        \"status\": \"new\",
+        \"created_at\": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.messages.insert_one(doc)
+    return {\"ok\": True, \"id\": doc[\"id\"]}
+
+@api.get(\"/admin/messages\")
+async def admin_messages(_admin=Depends(require_admin)):
+    return await db.messages.find({}, {\"_id\": 0}).sort(\"created_at\", -1).to_list(500)
+
+@api.put(\"/admin/messages/{mid}/status\")
+async def admin_message_status(mid: str, body: dict, _admin=Depends(require_admin)):
+    status = body.get(\"status\")
+    if status not in (\"new\", \"read\", \"replied\", \"archived\"):
+        raise HTTPException(400, \"وضعیت نامعتبر\")
+    r = await db.messages.update_one({\"id\": mid}, {\"$set\": {\"status\": status}})
+    if r.matched_count == 0:
+        raise HTTPException(404, \"پیام یافت نشد\")
+    return {\"ok\": True}
+
 # ------------------ Orders ------------------
 @api.get(\"/orders\")
 async def my_orders(user: dict = Depends(get_current_user)):
     return await db.orders.find({\"user_email\": user[\"email\"]}, {\"_id\": 0}).sort(\"created_at\", -1).to_list(200)
+
+@api.get(\"/orders/{oid}\")
+async def order_detail(oid: str, user: dict = Depends(get_current_user)):
+    o = await db.orders.find_one({\"id\": oid}, {\"_id\": 0})
+    if not o:
+        raise HTTPException(404, \"سفارش یافت نشد\")
+    if user.get(\"role\") != \"admin\" and o.get(\"user_email\") != user[\"email\"]:
+        raise HTTPException(403, \"دسترسی ندارید\")
+    return o
 
 # ------------------ Checkout ------------------
 @api.post(\"/checkout/session\")
