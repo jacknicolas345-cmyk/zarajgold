@@ -351,39 +351,85 @@ async def create_checkout(data: CheckoutIn, request: Request, user: dict = Depen
 
     return {\"url\": session.url, \"session_id\": session.session_id, \"order_id\": order_id}
 
-@api.get(\"/checkout/status/{session_id}\")
+@api.get("/checkout/status/{session_id}")
 async def checkout_status(session_id: str, request: Request):
-    webhook_url = f\"{str(request.base_url).rstrip('/')}/api/webhook/stripe\"
+    webhook_url = f"{str(request.base_url).rstrip('/')}/api/webhook/stripe"
     stripe = StripeCheckout(api_key=STRIPE_KEY, webhook_url=webhook_url)
-    status = await stripe.get_checkout_status(session_id)
 
-    txn = await db.payment_transactions.find_one({\"session_id\": session_id}, {\"_id\": 0})
-    if txn and txn.get(\"payment_status\") != \"paid\":
-        if status.payment_status == \"paid\":
+    # اگر Stripe خطا داد، API کرش نکند
+    try:
+        status = await stripe.get_checkout_status(session_id)
+    except Exception as e:
+        logger.warning(f"Stripe status lookup failed for {session_id}: {e}")
+
+        txn = await db.payment_transactions.find_one(
+            {"session_id": session_id},
+            {"_id": 0}
+        )
+
+        return {
+            "status": "open",
+            "payment_status": (txn or {}).get("payment_status", "initiated"),
+            "amount_total": int(round((txn or {}).get("amount", 0) * 100)),
+            "currency": (txn or {}).get("currency", "usd"),
+        }
+
+    txn = await db.payment_transactions.find_one(
+        {"session_id": session_id},
+        {"_id": 0}
+    )
+
+    if txn and txn.get("payment_status") != "paid":
+
+        if status.payment_status == "paid":
             await db.payment_transactions.update_one(
-                {\"session_id\": session_id},
-                {\"$set\": {\"payment_status\": \"paid\", \"updated_at\": datetime.now(timezone.utc).isoformat()}},
+                {"session_id": session_id},
+                {
+                    "$set": {
+                        "payment_status": "paid",
+                        "updated_at": datetime.now(timezone.utc).isoformat()
+                    }
+                },
             )
+
             await db.orders.update_one(
-                {\"session_id\": session_id},
-                {\"$set\": {\"payment_status\": \"paid\", \"status\": \"processing\"}},
+                {"session_id": session_id},
+                {
+                    "$set": {
+                        "payment_status": "paid",
+                        "status": "processing"
+                    }
+                },
             )
-        elif status.status == \"expired\":
+
+        elif status.status == "expired":
             await db.payment_transactions.update_one(
-                {\"session_id\": session_id},
-                {\"$set\": {\"payment_status\": \"expired\"}},
+                {"session_id": session_id},
+                {
+                    "$set": {
+                        "payment_status": "expired"
+                    }
+                },
             )
+
             await db.orders.update_one(
-                {\"session_id\": session_id},
-                {\"$set\": {\"payment_status\": \"expired\", \"status\": \"cancelled\"}},
+                {"session_id": session_id},
+                {
+                    "$set": {
+                        "payment_status": "expired",
+                        "status": "cancelled"
+                    }
+                },
             )
+
     return {
-        \"status\": status.status,
-        \"payment_status\": status.payment_status,
-        \"amount_total\": status.amount_total,
-        \"currency\": status.currency,
+        "status": status.status,
+        "payment_status": status.payment_status,
+        "amount_total": status.amount_total,
+        "currency": status.currency,
     }
 
+    
 @api.post(\"/webhook/stripe\")
 async def stripe_webhook(request: Request):
     body = await request.body()
