@@ -1,4 +1,4 @@
-"@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -38,9 +38,6 @@ body {
     --ring: 39 49% 56%;
     --radius: 0.25rem;
   }
-}
-
-@layer base {
   * { @apply border-border; }
   body { @apply bg-background text-foreground; }
   h1,h2,h3,h4 { letter-spacing: -0.01em; }
@@ -59,8 +56,13 @@ body {
   border-radius: 2px;
   transition: background-color .3s ease, transform .3s ease;
   font-weight: 500;
+  display: inline-block;
+  text-align: center;
+  cursor: pointer;
+  border: none;
 }
 .btn-gold:hover { background-color: #B38C45; }
+
 .btn-outline-gold {
   border: 1px solid #C5A059;
   color: #C5A059;
@@ -69,6 +71,9 @@ body {
   border-radius: 2px;
   transition: all .3s ease;
   font-weight: 500;
+  display: inline-block;
+  text-align: center;
+  cursor: pointer;
 }
 .btn-outline-gold:hover { background: #C5A059; color: #fff; }
 
@@ -129,4 +134,3 @@ input, textarea, select { text-align: right; }
   transition: width .3s ease;
 }
 .link-hover:hover::after { width: 100%; }
-"
